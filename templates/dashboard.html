@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>PalmPay - Dashboard</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <style>
+        .scan-modal { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.82); backdrop-filter: blur(8px); z-index: 12050; align-items: center; justify-content: center; padding: 20px; }
+        .scan-modal.active { display: flex; }
+        .scan-box { width: 100%; max-width: 520px; background: #101616; border: 1px solid rgba(53, 242, 179, 0.35); border-radius: 24px; padding: 25px; text-align: center; box-shadow: 0 0 50px rgba(53, 242, 179, 0.12); }
+        .scan-box h2 { margin-bottom: 8px; }
+        .scan-box p { color: #9aa7a3; margin-bottom: 20px; }
+        .camera-container { position: relative; width: 100%; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 18px; background: #050808; border: 2px solid rgba(53, 242, 179, 0.25); }
+        #authVideo { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        .camera-overlay { position: absolute; inset: 0; pointer-events: none; }
+        .scan-frame { position: absolute; width: 65%; height: 55%; left: 17.5%; top: 22.5%; border: 2px solid #35f2b3; border-radius: 50%; box-shadow: 0 0 20px rgba(53, 242, 179, 0.35); }
+        .scan-line { position: absolute; width: 65%; height: 2px; left: 17.5%; top: 22.5%; background: #35f2b3; box-shadow: 0 0 12px #35f2b3; animation: scanMove 2s infinite; }
+        @keyframes scanMove { 0% { top: 22.5%; } 50% { top: 77%; } 100% { top: 22.5%; } }
+        .auth-status { margin-top: 18px; padding: 13px; border-radius: 12px; background: rgba(53, 242, 179, 0.07); color: #35f2b3; font-size: 14px; }
+        .auth-status.error { color: #ff6b6b; background: rgba(255, 107, 107, 0.08); }
+        .auth-status.success { color: #35f2b3; background: rgba(53, 242, 179, 0.12); }
+        .auth-progress { margin-top: 15px; width: 100%; height: 7px; background: #202828; border-radius: 20px; overflow: hidden; }
+        .auth-progress-bar { width: 0%; height: 100%; background: #35f2b3; transition: width 0.25s ease; }
+        .auth-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        .auth-buttons button { flex: 1; }
+        .notification-panel { display: none; position: absolute; right: 0; top: 52px; width: 360px; max-width: calc(100vw - 30px); background: #101616; border: 1px solid rgba(53, 242, 179, 0.25); border-radius: 18px; box-shadow: 0 18px 55px rgba(0,0,0,0.42); z-index: 10000; overflow: hidden; }
+        .notification-panel.active { display: block; }
+        .receiver-preview { display: none; margin-top: -4px; padding: 10px 12px; border-radius: 10px; background: rgba(53, 242, 179, 0.07); border: 1px solid rgba(53, 242, 179, 0.16); color: #b7c5c0; font-size: 12px; }
+        .receiver-preview.show { display: block; }
+        .receiver-preview.error { color: #ff8b8b; border-color: rgba(255, 107, 107, 0.2); background: rgba(255, 107, 107, 0.06); }
+        .chat-window { display: none; position: fixed; right: 24px; bottom: 94px; width: 380px; max-width: calc(100vw - 30px); height: 560px; max-height: calc(100vh - 125px); background: #0d1313; border: 1px solid rgba(53,242,179,.28); border-radius: 22px; box-shadow: 0 22px 80px rgba(0,0,0,.55), 0 0 35px rgba(53,242,179,.08); z-index: 10999; overflow: hidden; flex-direction: column; }
+        .chat-window.active { display: flex; }
+        .chat-message.user .chat-bubble { background: rgba(53,242,179,.13); color: #e5fff6; }
+        .chat-message.bot .chat-bubble { background: #151e1d; color: #c8d2ce; }
+        .chat-bubble { max-width: 84%; padding: 10px 12px; border-radius: 15px; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="{{ url_for('home') }}" class="logo"><i class="bi bi-fingerprint"></i>PalmPay</a>
+            <div class="nav-links">
+                <a href="{{ url_for('dashboard') }}">Dashboard</a>
+                <a href="{{ url_for('security_center') }}"><i class="bi bi-shield-check"></i> Command Center</a>
+                <a href="#security" onclick="scrollToSecurity(event)"><i class="bi bi-shield-lock"></i> Security</a>
+                <a href="{{ url_for('logout') }}">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="dashboard">
+        <div class="dashboard-header"><div><h1>Welcome, {{ name }}</h1><p>Manage your PalmPay wallet and payments.</p></div></div>
+        <div class="dashboard-grid">
+            <div class="dashboard-card"><div class="card-icon"><i class="bi bi-wallet2"></i></div><div><span>Available Balance</span><h2 class="balance">₹{{ "%.2f"|format(balance) }}</h2></div></div>
+            <div class="dashboard-card"><div class="card-icon"><i class="bi bi-arrow-up-right"></i></div><div><span>Total Spent</span><h2>₹{{ "%.2f"|format(total_spent) }}</h2></div></div>
+            <div class="dashboard-card"><div class="card-icon"><i class="bi bi-plus-circle"></i></div><div><span>Money Added</span><h2>₹{{ "%.2f"|format(total_added) }}</h2></div></div>
+            <div class="dashboard-card"><div class="card-icon"><i class="bi bi-fingerprint"></i></div><div><span>Palm Authentication</span>{% if palm_id %}<h3 class="status"><i class="bi bi-check-circle-fill"></i> Registered</h3><small>{{ palm_id }}</small>{% else %}<h3>Not Registered</h3>{% endif %}</div></div>
+        </div>
+
+        <div class="payment-section">
+            <div class="payment-box">
+                <div class="payment-info"><i class="bi bi-plus-circle"></i><div><h2>Add Money</h2><p>Add virtual money to your PalmPay wallet.</p></div></div>
+                <form method="POST" action="{{ url_for('add_money') }}" class="payment-form">
+                    <input type="number" name="amount" placeholder="Enter amount" min="1" step="0.01" required>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i>Add Money</button>
+                </form>
+            </div>
+            <div class="payment-box">
+                <div class="payment-info"><i class="bi bi-send"></i><div><h2>Send Payment</h2><p>Enter receiver details and authenticate with your palm.</p></div></div>
+                <form method="POST" action="{{ url_for('pay') }}" id="paymentForm" class="payment-form">
+                    <input type="tel" name="receiver" id="receiver" placeholder="10-digit receiver mobile number" maxlength="10" inputmode="numeric" autocomplete="tel" pattern="[6-9][0-9]{9}" required oninput="lookupReceiver()">
+                    <div class="receiver-preview" id="receiverPreview"></div>
+                    <input type="number" name="amount" id="amount" placeholder="Amount" min="1" step="0.01" required>
+                    {% if palm_id %}
+                        <button type="button" class="btn btn-primary" id="authenticateButton" onclick="startAuthentication()"><i class="bi bi-fingerprint"></i>Authenticate & Pay</button>
+                    {% else %}
+                        <a href="{{ url_for('register_palm') }}" class="btn btn-primary"><i class="bi bi-fingerprint"></i>Register Palm First</a>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+
+        <section class="transactions-section">
+            <div class="transaction-header">
+                <div><h2>Transaction History</h2><p>Your recent PalmPay activity.</p></div>
+                <div class="transaction-tools">
+                    <input type="text" id="transactionSearch" class="transaction-search" placeholder="Search transactions..." onkeyup="filterTransactions()">
+                    <select id="transactionFilter" onchange="filterTransactions()"><option value="ALL">All</option><option value="SUCCESS">Payments</option><option value="TOPUP">Top Ups</option></select>
+                </div>
+            </div>
+            <div id="transactionList">
+                {% if transactions %}
+                    {% for transaction in transactions %}
+                    <div class="transaction" data-status="{{ transaction['status'] }}" data-search="{{ transaction['receiver'] }} {{ transaction['transaction_id'] }}">
+                        <div class="transaction-icon">{% if transaction['status'] == 'TOPUP' %}<i class="bi bi-plus-lg"></i>{% else %}<i class="bi bi-arrow-up-right"></i>{% endif %}</div>
+                        <div class="transaction-details"><strong>{{ transaction['receiver'] }}</strong><small>{{ transaction['transaction_id'] }}</small><small>{{ transaction['created_at'] }}</small></div>
+                        <div class="transaction-amount">{% if transaction['status'] == 'TOPUP' %}<span class="positive">+ ₹{{ "%.2f"|format(transaction['amount']|abs) }}</span><small>Money Added</small>{% else %}<span>- ₹{{ "%.2f"|format(transaction['amount']) }}</span><small>Payment</small>{% endif %}</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-transactions"><i class="bi bi-receipt"></i><p>No transactions yet.</p></div>
+                {% endif %}
+            </div>
+        </section>
+    </main>
+
+    <div class="scan-modal" id="authModal"><div class="scan-box"><h2><i class="bi bi-fingerprint"></i>Palm Authentication</h2><p>Place your palm inside the frame.</p><div class="camera-container" id="cameraContainer"><video id="authVideo" autoplay muted playsinline></video><div class="camera-overlay"><div class="scan-frame"></div><div class="scan-line"></div></div></div><div class="auth-status" id="authStatus"><i class="bi bi-camera"></i>Starting camera...</div><div class="auth-progress"><div class="auth-progress-bar" id="authProgress"></div></div><div class="auth-buttons"><button type="button" class="btn btn-primary" id="retryPalmScanButton" onclick="retryPalmScan()" style="display:none;"><i class="bi bi-arrow-repeat"></i>Retry Palm Scan</button><button type="button" class="btn btn-secondary" onclick="closeAuthentication()"><i class="bi bi-x-lg"></i>Cancel</button></div></div></div>
+
+    <script>
+        function scrollToSecurity(event) { if (event) event.preventDefault(); const section = document.getElementById("security"); if (section) section.scrollIntoView({ behavior: "smooth", block: "start" }); }
+        function filterTransactions() { const search = document.getElementById('transactionSearch').value.toLowerCase().trim(); const filter = document.getElementById('transactionFilter').value; const transactions = document.querySelectorAll('.transaction'); transactions.forEach(transaction => { const matchesSearch = transaction.dataset.search.toLowerCase().includes(search); const matchesFilter = filter === 'ALL' || transaction.dataset.status === filter; transaction.style.display = (matchesSearch && matchesFilter) ? 'flex' : 'none'; }); }
+    </script>
+</body>
+</html>
